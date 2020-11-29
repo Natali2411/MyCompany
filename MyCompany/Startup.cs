@@ -10,6 +10,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using MyCompany.Service;
+using MyCompany.Domain.Repositories.Abstract;
+using MyCompany.Domain.Repositories.EntityFramework;
+using MyCompany.Domain;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 
 namespace MyCompany
 {
@@ -19,30 +24,65 @@ namespace MyCompany
         public Startup(IConfiguration configuration) => Configuration = configuration;
         public void ConfigureServices(IServiceCollection services)
         {
-            // підключаємо конфіг із appsettings.json
+            // connect config from appsettings.json
             Configuration.Bind("Project", new Config());
+
+            // connect an appropriate functionality of application as services
+            services.AddTransient<ITextFieldsRepository, EFTextFieldsRepository>();
+            services.AddTransient<IServiceItemsRepository, EFServiceItemsRepository>();
+            services.AddTransient<DataManager>();
+
+            // connect the context of DB
+            services.AddDbContext<AppDbContext>(x => x.UseSqlServer(Config.ConnectionString));
+
+            // configure identity system
+            services.AddIdentity<IdentityUser, IdentityRole>(opts =>
+            {
+                opts.User.RequireUniqueEmail = true;
+                opts.Password.RequiredLength = 6;
+                opts.Password.RequireNonAlphanumeric = false;
+                opts.Password.RequireLowercase = false;
+                opts.Password.RequireUppercase = false;
+                opts.Password.RequireDigit = false;
+            }).AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
+
+            // configure authentication cookie
+            services.ConfigureApplicationCookie(options =>
+            {
+                options.Cookie.Name = "myCompanyAuth";
+                options.Cookie.HttpOnly = true;
+                options.LoginPath = "/account/login";
+                options.AccessDeniedPath = "/account/accessdenied";
+                options.SlidingExpiration = true;
+            });
+
             // add supporting of controllers and views (MVC)
             services.AddControllersWithViews()
                 // set compatibility with asp.net core 3.0
                 .SetCompatibilityVersion(CompatibilityVersion.Version_3_0).AddSessionStateTempDataProvider();
+
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            // !!! порядок реєстрації middleware(services) дуже важливий
-            // в процесі розробки нам важливо бачити інформацію про помилки
+            // the order of registration of middleware(services) is a very important
+            // during development it is important to see errors
             if (env.IsDevelopment())
             {
-                
                 app.UseDeveloperExceptionPage();
             }
 
             app.UseRouting();
-            // підключаємо підтримку статичних файлів (css, js, etc.)
+            // connect supporting of static files in the application (css, js, etc.)
             app.UseStaticFiles();
 
-            // реєструємо потрібні нам маршрути (ендпоінти)
+            // connect authentication anf authorization
+            app.UseCookiePolicy();
+            app.UseAuthentication();
+            app.UseAuthorization();
+
+            // register needed routes (endpoints)
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
