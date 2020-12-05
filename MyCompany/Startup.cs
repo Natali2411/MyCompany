@@ -56,8 +56,17 @@ namespace MyCompany
                 options.SlidingExpiration = true;
             });
 
+            // configure the policy of authorization for Admin area
+            services.AddAuthorization(x =>
+            {
+                x.AddPolicy("AdminArea", policy => { policy.RequireRole("admin"); });
+            });
+
             // add supporting of controllers and views (MVC)
-            services.AddControllersWithViews()
+            services.AddControllersWithViews(x =>
+            {
+                x.Conventions.Add(new AdminAreaAuthorization("Admin", "AdminArea"));
+            })
                 // set compatibility with asp.net core 3.0
                 .SetCompatibilityVersion(CompatibilityVersion.Version_3_0).AddSessionStateTempDataProvider();
 
@@ -85,7 +94,12 @@ namespace MyCompany
             // register needed routes (endpoints)
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
+                endpoints.MapControllerRoute(
+                    name: "admin", pattern: "{area:exists}/{controller=AdminHome}/{action=Index}/{id?}"
+                    ); // {area:exists}/
+                endpoints.MapControllerRoute(
+                    name: "default", pattern: "{controller=Home}/{action=Index}/{id?}"
+                    );
             });
         }
     }
